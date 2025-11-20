@@ -1,0 +1,71 @@
+name: Build Ultimate Gauge Board PIO Project
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+
+    - name: Install PlatformIO
+      run: |
+        python -m pip install --upgrade pip
+        pip install platformio
+
+    - name: Cache PlatformIO
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.platformio
+          .pio
+        key: ${{ runner.os }}-pio-${{ hashFiles('**/platformio.ini') }}
+        restore-keys: |
+          ${{ runner.os }}-pio-
+
+    - name: Build project
+      run: |
+        pio run
+      # optionally specify environment if you have multiple, e.g. `pio run -e your_env`
+
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: firmware
+        path: |
+          ./.pio/build/**/firmware*.bin
+          ./.pio/build/**/firmware*.elf
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v0.${{ github.run_number }}
+        release_name: Release v0.${{ github.run_number }}
+        body: |
+          Automatic build from commit ${{ github.sha }}
+        draft: false
+        prerelease: false
+
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./.pio/build/esp32-s3-devkitc1-n8r8/firmware.bin
+        asset_name: firmware.bin
+        asset_content_type: application/octet-stream
